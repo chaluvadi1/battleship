@@ -681,23 +681,45 @@ function renderAtkGrid(){
 }
 }
 
-function renderDefGrid(){
+function renderDefGrid() {
   const other = role === 'p1' ? 'p2' : 'p1';
 
-  if (!gs[role] || !gs[other] || !gs[role].board) return;  
+  // 1. Safety Check: Ensure the player data exists
+  if (!gs[role] || !gs[other]) return;
 
-  const oShots = gs[other].shots.map ? gs[other].shots : Object.values(gs[other].shots).map(r => Object.values(r));
   const grid = document.getElementById('def-grid');
   grid.innerHTML = '';
   addColLbls(grid);
-  for(let r=0;r<N;r++){
-    const row=document.createElement('div');row.className='g-row';addRlbl(row,r);
-    for(let c=0;c<N;c++){
-      const cell=document.createElement('div');cell.className='cell disabled';
-      const sid = gs[other]?.board?.[r]?.[c] || null;
-      if(shot==='hit'){cell.classList.add('hit');cell.textContent='🔥';}
-      else if(shot==='miss'){cell.classList.add('miss');cell.textContent='💧';}
-      else if(sid){cell.classList.add('placed');cell.textContent='🟦';}
+
+  for (let r = 0; r < N; r++) {
+    const row = document.createElement('div');
+    row.className = 'g-row';
+    addRlbl(row, r);
+
+    for (let c = 0; c < N; c++) {
+      const cell = document.createElement('div');
+      cell.className = 'cell disabled';
+
+      // 2. MODERN LOOKUP: No .map() needed, just use optional chaining
+      // 'shot' is what the OTHER player did to YOUR board
+      const shot = gs[other]?.shots?.[r]?.[c] || null;
+      
+      // 'sid' is the ship ID on YOUR own board
+      const sid = gs[role]?.board?.[r]?.[c] || null;
+
+      // 3. Logic Check
+      if (shot === 'hit') {
+        cell.classList.add('hit');
+        cell.textContent = '🔥';
+      } else if (shot === 'miss') {
+        cell.classList.add('miss');
+        cell.textContent = '💧';
+      } else if (sid) {
+        // If there's a ship here and it hasn't been hit yet, show it to the owner
+        cell.classList.add('placed');
+        cell.textContent = '🟦';
+      }
+      
       row.appendChild(cell);
     }
     grid.appendChild(row);
