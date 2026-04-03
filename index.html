@@ -599,7 +599,7 @@ function renderAtkGrid(){
     const row=document.createElement('div');row.className='g-row';addRlbl(row,r);
     for(let c=0;c<N;c++){
       const cell=document.createElement('div');cell.className='cell';
-      const shot=shots[r][c];
+      const shot=(shots[r]||[])[c] || null;
       if(shot==='hit'){
         const sid=gs[other].board[r][c];
         cell.classList.add('hit','disabled');
@@ -623,8 +623,8 @@ function renderAtkGrid(){
 }
 
 function renderDefGrid(){
-  if(!gs[role]||!gs[other=role==='p1'?'p2':'p1']||!gs[role].board)return;
   const other=role==='p1'?'p2':'p1';
+  if(!gs[role]||!gs[other=role==='p1'?'p2':'p1']||!gs[role].board)return;  
   const oShots=gs[other].shots.map?gs[other].shots:Object.values(gs[other].shots).map(r=>Object.values(r));
   const grid=document.getElementById('def-grid');grid.innerHTML='';
   addColLbls(grid);
@@ -632,7 +632,7 @@ function renderDefGrid(){
     const row=document.createElement('div');row.className='g-row';addRlbl(row,r);
     for(let c=0;c<N;c++){
       const cell=document.createElement('div');cell.className='cell disabled';
-      const sid=myD.board[r][c], shot=oShots[r][c];
+      const sid=(myD.board[r]||[])[c], shot=(shots[r]||[])[c] || null;
       if(shot==='hit'){cell.classList.add('hit');cell.textContent='🔥';}
       else if(shot==='miss'){cell.classList.add('miss');cell.textContent='💧';}
       else if(sid){cell.classList.add('placed');cell.textContent='🟦';}
