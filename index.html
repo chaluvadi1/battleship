@@ -590,8 +590,9 @@ function addRlbl(row,r){const l=document.createElement('div');l.className='g-rl'
 
 function renderAtkGrid(){
   const other=role==='p1'?'p2':'p1';
-  const shots = gs[role].shots.map ? gs[role].shots : Object.values(gs[role].shots).map(r => Object.values(r));
-  const oShips = gs[other].ships;
+  if(!gs[other]||!gs[other].ships||!gs[role]||!gs[role].shots)return;
+  const shots=gs[role].shots.map?gs[role].shots:Object.values(gs[role].shots).map(r=>Object.values(r));
+  const oShips=gs[other].ships;
   const grid=document.getElementById('atk-grid');grid.innerHTML='';
   addColLbls(grid);
   for(let r=0;r<N;r++){
@@ -622,7 +623,8 @@ function renderAtkGrid(){
 }
 
 function renderDefGrid(){
-  const myD=gs[role], other=role==='p1'?'p2':'p1';
+  if(!gs[role]||!gs[other=role==='p1'?'p2':'p1']||!gs[role].board)return;
+  const other=role==='p1'?'p2':'p1';
   const oShots=gs[other].shots.map?gs[other].shots:Object.values(gs[other].shots).map(r=>Object.values(r));
   const grid=document.getElementById('def-grid');grid.innerHTML='';
   addColLbls(grid);
