@@ -762,8 +762,8 @@ function renderAtkGrid(){
       cell.textContent = '💧';
     } 
     else {
-      // ... your existing aim/disabled logic ...
-    }
+      cell.classList.add('aim');
+      cell.onclick = () => fire(r, c)    }
     row.appendChild(cell);
   }
   grid.appendChild(row);
