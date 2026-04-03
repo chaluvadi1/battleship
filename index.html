@@ -300,6 +300,7 @@ let gs = {
   p2: { board: eb(), ships: {}, shots: eb(), ready: false }, 
   phase: 'placement' 
 };
+let mode = 'lobby'; // 'home', 'lobby', 'placement', 'game', 'win'
 let pollTmr = null, selShip = null, horiz = true, placed = {}, lastTs = 0, bc = null;
 
 /* ─────────────────────────────────────────
@@ -398,6 +399,7 @@ async function createGame(){
 
 /* ─── Join ─── */
 async function joinGame() {
+  
   const raw = document.getElementById('join-inp').value.trim().toUpperCase();
   if (raw.length !== 4) { hmsg('Enter a 4-character code!', 'err'); return; }
   
@@ -406,6 +408,26 @@ async function joinGame() {
   const state = await load(raw);
 
   if (!state) { hmsg('Game not found!', 'err'); return; }
+
+  const savedRole = sessionStorage.getItem('btls_role');
+  const savedCode = sessionStorage.getItem('btls_code');
+
+  if (raw === savedCode && savedRole) {
+      role = savedRole; // Reclaim your role from storage
+  } else if (state.p1 && state.p2) {
+      // Only block if it's a DIFFERENT person and both slots are taken
+      hmsg('🚫 Game is full!', 'err'); return;
+  } else {
+      role = 'p2'; // New joiner
+  }
+
+  // Save to storage for future refreshes
+  sessionStorage.setItem('btls_role', role);
+  sessionStorage.setItem('btls_code', raw);
+  // --------------------------------------
+
+  code = raw;
+  gs = state;
 
   // 1. Check if I'm already in this game (Returning Player)
   // This prevents P1 from becoming P2 if they refresh
@@ -913,6 +935,38 @@ function checkHash(){
 
 window.addEventListener('load',checkHash);
 window.addEventListener('focus',()=>{const m=curMode();if(code&&m)doPoll(code,m);});
+window.onload = async () => {
+  const savedCode = sessionStorage.getItem('btls_code');
+  const savedRole = sessionStorage.getItem('btls_role');
+
+  if (savedCode && savedRole) {
+    const state = await load(savedCode);
+    if (state) {
+      code = savedCode;
+      role = savedRole;
+      gs = state;
+      
+      // Route the player back to where they were
+      if (gs.phase === 'battle') {
+        show('game');
+        initGame();
+      } else {
+        show('placement');
+        // If they were already ready, show the waiting status
+        if (gs[role] && gs[role].ready) {
+           const el = document.getElementById('pl-status');
+           if(el) {
+             el.style.display = 'block';
+             el.innerHTML = '⏳ Reconnected! Waiting for opponent...';
+           }
+        } else {
+           initPl();
+        }
+      }
+      startPoll(code, gs.phase);
+    }
+  }
+};
 </script>
 </body>
 </html>
