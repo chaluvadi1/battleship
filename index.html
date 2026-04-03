@@ -846,35 +846,63 @@ function renderPanel(pid,ships,isEnemy){
 }
 
 /* ─── Fire ─── */
-async function fire(r,c){
-  if(!gs||gs.turn!==role||gs[role].shots[r][c])return;
-  const token=await getRecaptchaToken('fire');
-  const state=JSON.parse(JSON.stringify(gs));
-  const other=role==='p1'?'p2':'p1';
-  const sid=state[other].board[r][c];
-  if(sid){
-    state[role].shots[r][c]='hit';
-    state[other].ships[sid].hits=(state[other].ships[sid].hits||0)+1;
-    const cfg=SHIPS.find(s=>s.id===sid);
-    if(state[other].ships[sid].hits>=cfg.sz){
-      state[other].ships[sid].sunk=true;
-      state[other].ships[sid].cells.forEach(([sr,sc])=>{state[role].shots[sr][sc]='hit';});
-    }
-    if(SHIPS.every(s=>state[other].ships[s.id]?.sunk)){state.phase='done';state.winner=role;}
-    gMsg(state[other].ships[sid].sunk?`💥 You sank their ${SHIPS.find(s=>s.id===sid).name}!`:'🔥 HIT! Fire again!','ok');
-  } else {
-    state[role].shots[r][c]='miss';
-    state.turn=other;
-    gMsg("💧 MISS! Opponent's turn…",'wait');
+async function fire(r, c) {
+  // 1. Turn Guard
+  if (gs.turn !== role) {
+    hmsg("It's not your turn!", "err");
+    return;
   }
-  if(token)state.rc_token=token;
-  gs=state; await save(code,state); lastTs=gs.ts;
-  spawnBall(r,c,!!sid);
-  setTimeout(()=>{
-    renderGame();
-    if(state.phase==='done'){stopPoll();setTimeout(()=>showWin(state),900);}
-  },380);
+
+  // 2. Duplicate Shot Guard
+  if (gs[role].shots?.[r]?.[c]) return;
+
+  const enemy = role === 'p1' ? 'p2' : 'p1';
+  const hit = gs[enemy].board?.[r]?.[c] ? 'hit' : 'miss';
+
+  // 3. Update Shots (Ensure Object structure)
+  if (!gs[role].shots) gs[role].shots = {};
+  if (!gs[role].shots[r]) gs[role].shots[r] = {};
+  gs[role].shots[r][c] = hit;
+
+  // 4. Switch Turn
+  gs.turn = enemy;
+  gs.ts = Date.now();
+
+  // 5. Save & Sync
+  await save(code, gs);
+  renderGame();
+  hmsg(hit === 'hit' ? "BOOM! 🔥" : "Splash... 💧", hit === 'hit' ? 'success' : 'info');
 }
+
+// async function fire(r,c){
+//   if(!gs||gs.turn!==role||gs[role].shots[r][c])return;
+//   const token=await getRecaptchaToken('fire');
+//   const state=JSON.parse(JSON.stringify(gs));
+//   const other=role==='p1'?'p2':'p1';
+//   const sid=state[other].board[r][c];
+//   if(sid){
+//     state[role].shots[r][c]='hit';
+//     state[other].ships[sid].hits=(state[other].ships[sid].hits||0)+1;
+//     const cfg=SHIPS.find(s=>s.id===sid);
+//     if(state[other].ships[sid].hits>=cfg.sz){
+//       state[other].ships[sid].sunk=true;
+//       state[other].ships[sid].cells.forEach(([sr,sc])=>{state[role].shots[sr][sc]='hit';});
+//     }
+//     if(SHIPS.every(s=>state[other].ships[s.id]?.sunk)){state.phase='done';state.winner=role;}
+//     gMsg(state[other].ships[sid].sunk?`💥 You sank their ${SHIPS.find(s=>s.id===sid).name}!`:'🔥 HIT! Fire again!','ok');
+//   } else {
+//     state[role].shots[r][c]='miss';
+//     state.turn=other;
+//     gMsg("💧 MISS! Opponent's turn…",'wait');
+//   }
+//   if(token)state.rc_token=token;
+//   gs=state; await save(code,state); lastTs=gs.ts;
+//   spawnBall(r,c,!!sid);
+//   setTimeout(()=>{
+//     renderGame();
+//     if(state.phase==='done'){stopPoll();setTimeout(()=>showWin(state),900);}
+//   },380);
+// }
 
 function gMsg(txt,t){
   const el=document.getElementById('game-msg');
@@ -947,28 +975,55 @@ window.onload = async () => {
       code = savedCode;
       role = savedRole;
       gs = state;
-      
-      // Route the player back to where they were
+      // Re-route based on the phase in the database
       if (gs.phase === 'battle') {
-        show('game');
-        initGame();
+        mode = 'game'; show('game'); initGame(); startPoll(code, 'game');
       } else {
-        show('placement');
-        // If they were already ready, show the waiting status
-        if (gs[role] && gs[role].ready) {
-           const el = document.getElementById('pl-status');
-           if(el) {
-             el.style.display = 'block';
-             el.innerHTML = '⏳ Reconnected! Waiting for opponent...';
-           }
-        } else {
-           initPl();
-        }
+        mode = 'placement'; show('placement'); initPl(); startPoll(code, 'placement');
       }
-      startPoll(code, gs.phase);
     }
   }
 };
+window.addEventListener('load', async () => {
+  const savedCode = sessionStorage.getItem('btls_code');
+  const savedRole = sessionStorage.getItem('btls_role');
+
+  if (savedCode && savedRole) {
+    hmsg('🔄 Reconnecting...', 'wait');
+    const state = await load(savedCode);
+    
+    if (state) {
+      // Restore credentials
+      code = savedCode;
+      role = savedRole;
+      gs = state;
+      lastTs = gs.ts;
+
+      // Routing Logic
+      if (gs.phase === 'battle') {
+        mode = 'game';
+        show('game');
+        initGame(); // Sets mode to 'game' and renders grids
+        startPoll(code, 'game');
+      } else if (gs.phase === 'placement') {
+        mode = 'placement';
+        show('placement');
+        // If already ready, don't re-init placement grid
+        if (gs[role] && gs[role].ready) {
+           updPlStatus(); 
+        } else {
+           initPl();
+        }
+        startPoll(code, 'placement');
+      }
+      hmsg('✅ Connected', 'success');
+    } else {
+      // Game no longer exists in Firebase
+      sessionStorage.clear();
+    }
+  }
+});
+
 </script>
 </body>
 </html>
