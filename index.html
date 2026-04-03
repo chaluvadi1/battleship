@@ -477,12 +477,21 @@ function hmsg(m,t){
 /* ─── Poll ─── */
 function startPoll(c,mode){stopPoll();pollTmr=setInterval(()=>doPoll(c,mode),1500);}
 function stopPoll(){if(pollTmr){clearInterval(pollTmr);pollTmr=null;}}
-async function doPoll(c,mode){
-  try{
-    const s=await load(c);
-    if(!s||s.ts===lastTs)return;
-    lastTs=s.ts; apply(s,mode);
-  }catch(_){}
+async function doPoll(c, currentMode) {
+  try {
+    const s = await load(c);
+    if (!s || s.ts === lastTs) return;
+    lastTs = s.ts;
+
+    // 🏆 THE MASTER OVERRIDE
+    // If the DB says battle, but the poll thinks we are still in placement...
+    if (s.phase === 'battle' && currentMode !== 'game') {
+      // We manually tell apply to handle the transition
+      apply(s, 'placement'); 
+    } else {
+      apply(s, currentMode);
+    }
+  } catch (_) {}
 }
 function setupBC(c){
   try{
@@ -506,7 +515,7 @@ function apply(s, mode) {
   gs = s;
 
   // 1. If we are in placement but the game has moved to battle
-  if (s.phase === 'battle') {
+  if (s.phase === 'battle' && mode !== 'game') {
     // If the UI is still stuck in placement or lobby, force it to 'game'
     if (document.getElementById('placement').style.display !== 'none' || mode !== 'game') {
       stopPoll();
