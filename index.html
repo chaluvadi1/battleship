@@ -53,6 +53,11 @@ button, [onclick], .cell, .sr {
   user-select: none;
 }
 
+.grid-user, .grid-computer {
+    border: 2px solid red !important;
+    min-height: 200px; /* Force visibility */
+}
+
 .screen{display:none;flex-direction:column;align-items:center;width:100%;max-width:660px;gap:13px;animation:fadeUp .35s ease;}
 .screen.active{display:flex;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
