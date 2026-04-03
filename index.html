@@ -486,16 +486,39 @@ function curMode(){
   if(document.getElementById('sc-game').classList.contains('active'))return'game';
   return null;
 }
-function apply(s,mode){
-  gs=s;
-  if(mode==='lobby'&&s.phase==='placement' || s.phase === 'battle'){stopPoll();show('placement');initPl();startPoll(code,'placement');}
-  else if(mode==='placement'){
-    updPlStatus();
-    if(s.phase==='battle'){stopPoll();show('game');initGame();startPoll(code,'game');}
+
+function apply(s, mode) {
+  gs = s;
+
+  // 1. If we are in placement but the game has moved to battle
+  if (s.phase === 'battle') {
+    // If the UI is still stuck in placement or lobby, force it to 'game'
+    if (document.getElementById('placement').style.display !== 'none' || mode !== 'game') {
+      stopPoll();
+      show('game'); 
+      initGame(); // This calls renderGame()
+      startPoll(code, 'game');
+    } else {
+      // We are already in the game screen, just update the boards
+      renderGame();
+    }
+  } 
+  else if (mode === 'lobby' && s.phase === 'placement') {
+    stopPoll();
+    show('placement');
+    initPl();
+    startPoll(code, 'placement');
   }
-  else if(mode==='game'){
+  else if (mode === 'placement') {
+    updPlStatus();
+    // Logic for transitioning to battle is now handled by the top-level 'if'
+  }
+  else if (mode === 'game') {
     renderGame();
-    if(s.phase==='done'){stopPoll();setTimeout(()=>showWin(s),800);}
+    if (s.phase === 'done') {
+      stopPoll();
+      setTimeout(() => showWin(s), 800);
+    }
   }
 }
 
@@ -644,7 +667,7 @@ function updPlStatus(){
 }
 
 /* ─── Game ─── */
-function initGame(){switchTab('atk');renderGame();}
+function initGame(){mode = 'game';switchTab('atk');renderGame();}
 function switchTab(t){
   document.getElementById('tab-atk').classList.toggle('active',t==='atk');
   document.getElementById('tab-def').classList.toggle('active',t==='def');
