@@ -401,30 +401,27 @@ async function createGame(){
 async function joinGame() {
   
   const raw = document.getElementById('join-inp').value.trim().toUpperCase();
-  if (raw.length !== 4) { hmsg('Enter a 4-character code!', 'err'); return; }
-  
-  hmsg('🔍 Looking for game…', 'wait');
-  const token = await getRecaptchaToken('join_game');
   const state = await load(raw);
-
   if (!state) { hmsg('Game not found!', 'err'); return; }
 
   const savedRole = sessionStorage.getItem('btls_role');
   const savedCode = sessionStorage.getItem('btls_code');
 
+  // 1. If I am the original Player 1 or Player 2 returning, let me in!
   if (raw === savedCode && savedRole) {
-      role = savedRole; // Reclaim your role from storage
-  } else if (state.p1 && state.p2) {
-      // Only block if it's a DIFFERENT person and both slots are taken
-      hmsg('🚫 Game is full!', 'err'); return;
-  } else {
-      role = 'p2'; // New joiner
+    role = savedRole;
+  } 
+  // 2. If I'm a NEW player (no saved role), only block me if p2 is already present
+  else if (state.p2 && state.p2.ready) { 
+    hmsg('🚫 This game is full!', 'err');
+    return;
+  } 
+  // 3. Otherwise, I am the official Player 2
+  else {
+    role = 'p2';
+    sessionStorage.setItem('btls_role', 'p2');
+    sessionStorage.setItem('btls_code', raw);
   }
-
-  // Save to storage for future refreshes
-  sessionStorage.setItem('btls_role', role);
-  sessionStorage.setItem('btls_code', raw);
-  // --------------------------------------
 
   code = raw;
   gs = state;
