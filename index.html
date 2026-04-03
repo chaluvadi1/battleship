@@ -397,20 +397,62 @@ async function createGame(){
 }
 
 /* ─── Join ─── */
-async function joinGame(){
-  const raw=document.getElementById('join-inp').value.trim().toUpperCase();
-  if(raw.length!==4){hmsg('Enter a 4-character code!','err');return;}
-  hmsg('🔍 Looking for game…','wait');
-  const token=await getRecaptchaToken('join_game');
-  const state=await load(raw);
-  if(!state){hmsg('Game not found! Check the code.','err');return;}
-  if(state.phase!=='waiting'){hmsg('Game already started!','err');return;}
-  code=raw; role='p2'; gs=state;
-  gs.phase='placement'; gs.ts=Date.now();
-  if(token)gs.rc_token=token;
-  await save(code,gs); lastTs=gs.ts;
-  setupBC(code); show('placement'); initPl();
+async function joinGame() {
+  const raw = document.getElementById('join-inp').value.trim().toUpperCase();
+  if (raw.length !== 4) { hmsg('Enter a 4-character code!', 'err'); return; }
+  
+  hmsg('🔍 Looking for game…', 'wait');
+  const token = await getRecaptchaToken('join_game');
+  const state = await load(raw);
+
+  if (!state) { hmsg('Game not found!', 'err'); return; }
+
+  // 1. Check if I'm already in this game (Returning Player)
+  // This prevents P1 from becoming P2 if they refresh
+  if (code === raw && role) {
+      // Stay as current role
+  } else if (state.p2 && state.p2.ready && state.p1 && state.p1.ready) {
+      // Game is full
+      hmsg('Game is already full!', 'err'); return;
+  } else {
+      // New Joiner becomes P2
+      role = 'p2';
+  }
+
+  code = raw;
+  gs = state;
+
+  // 2. ONLY set to 'placement' if the game hasn't started yet
+  if (gs.phase === 'waiting') {
+      gs.phase = 'placement';
+  }
+
+  if (token) gs.rc_token = token;
+  
+  // Save the fact that P2 has joined
+  gs.ts = Date.now();
+  await save(code, gs);
+  lastTs = gs.ts;
+
+  setupBC(code);
+
+  // 3. ROUTING: Where should this player go?
+  if (gs.phase === 'battle') {
+      show('game');
+      initGame();
+  } else if (gs[role] && gs[role].ready) {
+      // I already placed my ships, show waiting screen
+      show('placement'); // Or a dedicated waiting view
+      const el = document.getElementById('pl-status');
+      el.style.display = 'block';
+      el.innerHTML = '⏳ Waiting for opponent...';
+  } else {
+      // Need to place ships
+      show('placement');
+      initPl();
+  }
 }
+
 function hmsg(m,t){
   const el=document.getElementById('home-msg');
   el.className='status '+(t==='err'?'serr':t==='wait'?'sw':'sok');
