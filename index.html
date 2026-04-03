@@ -307,16 +307,16 @@ async function save(c, data) {
   } catch(_){}
 }
 
-function fixArrays(s) {
-if(!s)return s;
-  ['p1','p2'].forEach(p=>{
-  if (s[p]) {
-    if (s[p].board = Object.values(s[p].board).map(r => Object.values(r)));
-    if (s[p].shots = Object.values(s[p].shots).map(r => Object.values(r)));
-  }
-  });
-  return s;
-}
+// function fixArrays(s) {
+// if(!s)return s;
+//   ['p1','p2'].forEach(p=>{
+//   if (s[p]) {
+//     if (s[p].board = Object.values(s[p].board).map(r => Object.values(r)));
+//     if (s[p].shots = Object.values(s[p].shots).map(r => Object.values(r)));
+//   }
+//   });
+//   return s;
+// }
 
 async function load(c) {
   try {
@@ -405,7 +405,7 @@ function hmsg(m,t){
 }
 
 /* ─── Poll ─── */
-function startPoll(c,mode){stopPoll();pollTmr=setInterval(()=>doPoll(c,mode),2500);}
+function startPoll(c,mode){stopPoll();pollTmr=setInterval(()=>doPoll(c,mode),1500);}
 function stopPoll(){if(pollTmr){clearInterval(pollTmr);pollTmr=null;}}
 async function doPoll(c,mode){
   try{
@@ -432,8 +432,8 @@ function curMode(){
   return null;
 }
 function apply(s,mode){
-  gs=fixArrays(s);
-  if(mode==='lobby'&&s.phase==='placement'){stopPoll();show('placement');initPl();startPoll(code,'placement');}
+  gs=s;
+  if(mode==='lobby'&&s.phase==='placement' || s.phase === 'battle'){stopPoll();show('placement');initPl();startPoll(code,'placement');}
   else if(mode==='placement'){
     updPlStatus();
     if(s.phase==='battle'){stopPoll();show('game');initGame();startPoll(code,'game');}
@@ -590,7 +590,8 @@ function addRlbl(row,r){const l=document.createElement('div');l.className='g-rl'
 
 function renderAtkGrid(){
   const other=role==='p1'?'p2':'p1';
-  const shots=gs[role].shots, oShips=gs[other].ships;
+  const shots = gs[role].shots.map ? gs[role].shots : Object.values(gs[role].shots).map(r => Object.values(r));
+  const oShips = gs[other].ships;
   const grid=document.getElementById('atk-grid');grid.innerHTML='';
   addColLbls(grid);
   for(let r=0;r<N;r++){
@@ -621,7 +622,8 @@ function renderAtkGrid(){
 }
 
 function renderDefGrid(){
-  const myD=gs[role], other=role==='p1'?'p2':'p1', oShots=gs[other].shots;
+  const myD=gs[role], other=role==='p1'?'p2':'p1';
+  const oShots=gs[other].shots.map?gs[other].shots:Object.values(gs[other].shots).map(r=>Object.values(r));
   const grid=document.getElementById('def-grid');grid.innerHTML='';
   addColLbls(grid);
   for(let r=0;r<N;r++){
