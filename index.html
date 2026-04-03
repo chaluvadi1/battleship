@@ -327,11 +327,11 @@ async function load(c) {
       const d = await r.json();
       if(d){
         try{localStorage.setItem('nv_'+c, JSON.stringify(d));}catch(_){}
-        return fixArrays(d);
+        return d;
       }
     }
   } catch(_){}
-  try{const s=localStorage.getItem('nv_'+c);if(s)return fixArrays(JSON.parse(s));}catch(_){}
+  try{const s=localStorage.getItem('nv_'+c);if(s)return JSON.parse(s);}catch(_){}
   return null;
 }
 
@@ -432,7 +432,7 @@ function curMode(){
   return null;
 }
 function apply(s,mode){
-  gs=s;
+  gs=fixArrays(s);
   if(mode==='lobby'&&s.phase==='placement'){stopPoll();show('placement');initPl();startPoll(code,'placement');}
   else if(mode==='placement'){
     updPlStatus();
