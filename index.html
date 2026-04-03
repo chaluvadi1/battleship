@@ -290,6 +290,9 @@ const ROWS=['1','2','3','4','5','6','7','8','9','10'];
 const FIREBASE_URL='https://battleship-1aae0-default-rtdb.asia-southeast1.firebasedatabase.app';
 const RECAPTCHA_SITEKEY='6Le_zaQsAAAAADZ6FuCOR5VhOzZJoW483TRoZKuD';
 
+/* ─── Factory ─── */
+const eb = () => Array.from({length: N}, () => Array(N).fill(null));
+
 /* ─── App State ─── */
 let code = null, role = null;
 let gs = { 
@@ -353,8 +356,7 @@ async function getRecaptchaToken(action='submit'){
   }catch(_){return null;}
 }
 
-/* ─── Factory ─── */
-const eb = () => Array.from({length: N}, () => Array(N).fill(null));
+
 
 function newGs(c){
   return{code:c,phase:'waiting',
