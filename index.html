@@ -291,8 +291,14 @@ const FIREBASE_URL='https://battleship-1aae0-default-rtdb.asia-southeast1.fireba
 const RECAPTCHA_SITEKEY='6Le_zaQsAAAAADZ6FuCOR5VhOzZJoW483TRoZKuD';
 
 /* ─── App State ─── */
-let code=null, role=null, gs=null;
-let pollTmr=null, selShip=null, horiz=true, placed={}, lastTs=0, bc=null;
+let code = null, role = null;
+let gs = { 
+  p1: { board: null, ships: {}, shots: [], ready: false }, 
+  p2: { board: null, ships: {}, shots: [], ready: false }, 
+  phase: 'placement',
+  ts: 0 
+};
+let pollTmr = null, selShip = null, horiz = true, placed = {}, lastTs = 0, bc = null;
 
 /* ─────────────────────────────────────────
    STORAGE / RELAY
