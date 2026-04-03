@@ -293,10 +293,9 @@ const RECAPTCHA_SITEKEY='6Le_zaQsAAAAADZ6FuCOR5VhOzZJoW483TRoZKuD';
 /* ─── App State ─── */
 let code = null, role = null;
 let gs = { 
-  p1: { board: null, ships: {}, shots: [], ready: false }, 
-  p2: { board: null, ships: {}, shots: [], ready: false }, 
-  phase: 'placement',
-  ts: 0 
+  p1: { board: eb(), ships: {}, shots: eb(), ready: false }, 
+  p2: { board: eb(), ships: {}, shots: eb(), ready: false }, 
+  phase: 'placement' 
 };
 let pollTmr = null, selShip = null, horiz = true, placed = {}, lastTs = 0, bc = null;
 
@@ -355,7 +354,8 @@ async function getRecaptchaToken(action='submit'){
 }
 
 /* ─── Factory ─── */
-const eb=()=>Array.from({length:N},()=>Array(N).fill(null));
+const eb = () => Array.from({length: N}, () => Array(N).fill(null));
+
 function newGs(c){
   return{code:c,phase:'waiting',
     p1:{board:eb(),ships:{},ready:false,shots:eb()},
@@ -624,7 +624,7 @@ function addColLbls(g){
 function addRlbl(row,r){const l=document.createElement('div');l.className='g-rl';l.textContent=ROWS[r];row.appendChild(l);}
 
 function renderAtkGrid(){
-    const other = role === 'p1' ? 'p2' : 'p1';
+  const other = role === 'p1' ? 'p2' : 'p1';
 
   // 1. Ensure the game state (gs) and required player objects exist
   if (!gs[role] || !gs[other]) return;
@@ -641,31 +641,42 @@ function renderAtkGrid(){
 
   // ... your loop to create grid squares should follow here ...
   addColLbls(grid);
-  for(let r=0;r<N;r++){
-    const row=document.createElement('div');row.className='g-row';addRlbl(row,r);
-    for(let c=0;c<N;c++){
-      const cell=document.createElement('div');cell.className='cell';
-      const shot=(shots[r]||[])[c] || null;
-      if(shot==='hit'){
-        const sid=gs[other].board[r][c];
-        cell.classList.add('hit','disabled');
-        if(sid&&oShips[sid]?.sunk){cell.classList.add('sunk-c');cell.textContent='💥';}
-        else cell.textContent='🔥';
-      } else if(shot==='miss'){
-        cell.classList.add('miss','disabled');cell.textContent='💧';
+  for (let r = 0; r < N; r++) {
+  const row = document.createElement('div');
+  row.className = 'g-row';
+  addRlbl(row, r);
+  
+  for (let c = 0; c < N; c++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+
+    // 1. SAFE LOOKUP: Check if shots[r] exists before looking for [c]
+    const playerShots = gs[role].shots || {};
+    const shot = gs[role]?.shots?.[r]?.[c] || null;
+
+    if (shot === 'hit') {
+      // 2. SAFE LOOKUP: Use optional chaining for the opponent's board
+      const sid = gs[other]?.board?.[r]?.[c]; 
+      cell.classList.add('hit', 'disabled');
+      
+      if (sid && oShips[sid]?.sunk) {
+        cell.classList.add('sunk-c');
+        cell.textContent = '💥';
       } else {
-        if(gs.turn===role){
-          cell.classList.add('aim');
-          cell.addEventListener('click',()=>fire(r,c));
-          cell.addEventListener('touchend',e=>{e.preventDefault();fire(r,c);},{passive:false});
-        } else {
-          cell.classList.add('disabled');cell.style.opacity='.45';
-        }
+        cell.textContent = '🔥';
       }
-      row.appendChild(cell);
+    } 
+    else if (shot === 'miss') {
+      cell.classList.add('miss', 'disabled');
+      cell.textContent = '💧';
+    } 
+    else {
+      // ... your existing aim/disabled logic ...
     }
-    grid.appendChild(row);
+    row.appendChild(cell);
   }
+  grid.appendChild(row);
+}
 }
 
 function renderDefGrid(){
@@ -681,7 +692,7 @@ function renderDefGrid(){
     const row=document.createElement('div');row.className='g-row';addRlbl(row,r);
     for(let c=0;c<N;c++){
       const cell=document.createElement('div');cell.className='cell disabled';
-      const sid=(myD.board[r]||[])[c], shot=(shots[r]||[])[c] || null;
+      const sid = gs[other]?.board?.[r]?.[c] || null;
       if(shot==='hit'){cell.classList.add('hit');cell.textContent='🔥';}
       else if(shot==='miss'){cell.classList.add('miss');cell.textContent='💧';}
       else if(sid){cell.classList.add('placed');cell.textContent='🟦';}
