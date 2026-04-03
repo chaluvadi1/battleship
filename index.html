@@ -307,6 +307,17 @@ async function save(c, data) {
   } catch(_){}
 }
 
+function fixArrays(s) {
+if(!s)return s;
+  ['p1','p2'].forEach(p=>{
+  if (s[p]) {
+    if (s[p].board = Object.values(s[p].board).map(r => Object.values(r)));
+    if (s[p].shots = Object.values(s[p].shots).map(r => Object.values(r)));
+  }
+  });
+  return s;
+}
+
 async function load(c) {
   try {
     const r = await fetch(FIREBASE_URL + '/games/' + c + '.json', {
@@ -316,11 +327,11 @@ async function load(c) {
       const d = await r.json();
       if(d){
         try{localStorage.setItem('nv_'+c, JSON.stringify(d));}catch(_){}
-        return d;
+        return fixArrays(d);
       }
     }
   } catch(_){}
-  try{const s=localStorage.getItem('nv_'+c);if(s)return JSON.parse(s);}catch(_){}
+  try{const s=localStorage.getItem('nv_'+c);if(s)return fixArrays(JSON.parse(s));}catch(_){}
   return null;
 }
 
