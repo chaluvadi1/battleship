@@ -399,74 +399,70 @@ async function createGame(){
 
 /* ─── Join ─── */
 async function joinGame() {
-  
   const raw = document.getElementById('join-inp').value.trim().toUpperCase();
+  if (raw.length !== 4) { hmsg('Enter a 4-character code!', 'err'); return; }
+
+  hmsg('🔍 Looking for game…', 'wait');
+
+  // 1. GET THE TOKEN FIRST (Prevents ReferenceError)
+  const token = await getRecaptchaToken('join_game');
+  
   const state = await load(raw);
   if (!state) { hmsg('Game not found!', 'err'); return; }
 
   const savedRole = sessionStorage.getItem('btls_role');
   const savedCode = sessionStorage.getItem('btls_code');
 
-  // 1. If I am the original Player 1 or Player 2 returning, let me in!
+  // 2. ROLE LOGIC: Are you returning or a new Player 2?
   if (raw === savedCode && savedRole) {
+    // You are a returning player (P1 or P2)
     role = savedRole;
   } 
-  // 2. If I'm a NEW player (no saved role), only block me if p2 is already present
-  else if (state.p2 && state.p2.ready) { 
+  else if (state.p2 && (state.p2.ready || state.p2.board)) { 
+    // Someone else is already Player 2
     hmsg('🚫 This game is full!', 'err');
     return;
   } 
-  // 3. Otherwise, I am the official Player 2
   else {
+    // You are the new Player 2
     role = 'p2';
     sessionStorage.setItem('btls_role', 'p2');
     sessionStorage.setItem('btls_code', raw);
   }
 
+  // Sync global state
   code = raw;
   gs = state;
 
-  // 1. Check if I'm already in this game (Returning Player)
-  // This prevents P1 from becoming P2 if they refresh
-  if (code === raw && role) {
-      // Stay as current role
-  } else if (state.p2 && state.p2.ready && state.p1 && state.p1.ready) {
-      // Game is full
-      hmsg('Game is already full!', 'err'); return;
-  } else {
-      // New Joiner becomes P2
-      role = 'p2';
-  }
-
-  code = raw;
-  gs = state;
-
-  // 2. ONLY set to 'placement' if the game hasn't started yet
+  // 3. PHASE LOGIC
   if (gs.phase === 'waiting') {
       gs.phase = 'placement';
   }
 
+  // Safe token assignment
   if (token) gs.rc_token = token;
   
-  // Save the fact that P2 has joined
   gs.ts = Date.now();
   await save(code, gs);
   lastTs = gs.ts;
 
   setupBC(code);
 
-  // 3. ROUTING: Where should this player go?
+  // 4. ROUTING: Battle vs Placement
   if (gs.phase === 'battle') {
       show('game');
-      initGame();
+      initGame(); // Ensure 'mode' is defined at the top of your script!
   } else if (gs[role] && gs[role].ready) {
-      // I already placed my ships, show waiting screen
-      show('placement'); // Or a dedicated waiting view
+      show('placement');
       const el = document.getElementById('pl-status');
-      el.style.display = 'block';
-      el.innerHTML = '⏳ Waiting for opponent...';
+      if(el) {
+        el.style.display = 'block';
+        el.innerHTML = '⏳ Waiting for opponent...';
+      }
+      // Hide ship dock if it exists to prevent re-placing
+      const dock = document.getElementById('ship-dock');
+      if(dock) dock.style.display = 'none';
   } else {
-      // Need to place ships
       show('placement');
       initPl();
   }
