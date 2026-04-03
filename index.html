@@ -846,33 +846,71 @@ function renderPanel(pid,ships,isEnemy){
 }
 
 /* ─── Fire ─── */
+
 async function fire(r, c) {
-  // 1. Turn Guard
+  // 1. Turn Check (Ensure this is p1 or p2)
   if (gs.turn !== role) {
-    hmsg("It's not your turn!", "err");
+    hmsg("Wait for your turn!", "err");
     return;
   }
 
-  // 2. Duplicate Shot Guard
-  if (gs[role].shots?.[r]?.[c]) return;
+  const other = role === 'p1' ? 'p2' : 'p1';
 
-  const enemy = role === 'p1' ? 'p2' : 'p1';
-  const hit = gs[enemy].board?.[r]?.[c] ? 'hit' : 'miss';
-
-  // 3. Update Shots (Ensure Object structure)
+  // --- THE CRITICAL FIX START ---
+  // Ensure the 'shots' object exists for the current player
   if (!gs[role].shots) gs[role].shots = {};
-  if (!gs[role].shots[r]) gs[role].shots[r] = {};
-  gs[role].shots[r][c] = hit;
 
-  // 4. Switch Turn
-  gs.turn = enemy;
+  // Ensure the ROW 'r' exists inside shots before we try to access index 'c'
+  if (!gs[role].shots[r]) gs[role].shots[r] = {}; 
+  
+  // Now we can safely check if a shot was already taken
+  if (gs[role].shots[r][c]) return; 
+  // --- THE CRITICAL FIX END ---
+
+  // 2. Ship ID Check (The logic you had earlier)
+  const targetId = gs[other]?.board?.[r]?.[c];
+  const result = targetId ? 'hit' : 'miss';
+
+  // 3. Record the shot
+  gs[role].shots[r][c] = result;
+
+  // 4. Turn Switch & Sync
+  gs.turn = other;
   gs.ts = Date.now();
 
-  // 5. Save & Sync
+  hmsg(result === 'hit' ? "BOOM! 🔥" : "Splash... 💧", result === 'hit' ? 'success' : 'info');
+  
   await save(code, gs);
   renderGame();
-  hmsg(hit === 'hit' ? "BOOM! 🔥" : "Splash... 💧", hit === 'hit' ? 'success' : 'info');
 }
+
+// async function fire(r, c) {
+//   // 1. Turn Guard
+//   if (gs.turn !== role) {
+//     hmsg("It's not your turn!", "err");
+//     return;
+//   }
+
+//   // 2. Duplicate Shot Guard
+//   if (gs[role].shots?.[r]?.[c]) return;
+
+//   const enemy = role === 'p1' ? 'p2' : 'p1';
+//   const hit = gs[enemy].board?.[r]?.[c] ? 'hit' : 'miss';
+
+//   // 3. Update Shots (Ensure Object structure)
+//   if (!gs[role].shots) gs[role].shots = {};
+//   if (!gs[role].shots[r]) gs[role].shots[r] = {};
+//   gs[role].shots[r][c] = hit;
+
+//   // 4. Switch Turn
+//   gs.turn = enemy;
+//   gs.ts = Date.now();
+
+//   // 5. Save & Sync
+//   await save(code, gs);
+//   renderGame();
+//   hmsg(hit === 'hit' ? "BOOM! 🔥" : "Splash... 💧", hit === 'hit' ? 'success' : 'info');
+// }
 
 // async function fire(r,c){
 //   if(!gs||gs.turn!==role||gs[role].shots[r][c])return;
