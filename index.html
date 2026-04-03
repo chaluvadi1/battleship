@@ -248,6 +248,7 @@ const SHIPS=[
 const N=10;
 const COLS=['A','B','C','D','E','F','G','H','I','J'];
 const ROWS=['1','2','3','4','5','6','7','8','9','10'];
+const FIREBASE_URL='https://battleship-1aae0-default-rtdb.asia-southeast1.firebasedatabase.app';
 
 /* ─── App State ─── */
 let code=null, role=null, gs=null;
@@ -255,7 +256,7 @@ let pollTmr=null, selShip=null, horiz=true, placed={}, lastTs=0, bc=null;
 
 /* ─────────────────────────────────────────
    STORAGE / RELAY
-   Uses jsonblob.com (free, CORS-enabled)
+   Uses Firebase Realtime Database REST API
    + localStorage fallback for same device
 ──────────────────────────────────────────*/
 async function save(c, data) {
@@ -263,38 +264,25 @@ async function save(c, data) {
   try { localStorage.setItem('nv_'+c, JSON.stringify(data)); } catch(_){}
   try { if(bc) bc.postMessage(data); } catch(_){}
   try {
-    const bId = localStorage.getItem('nv_blob_'+c);
-    if (bId) {
-      await fetch('https://jsonblob.com/api/jsonBlob/'+bId,{
-        method:'PUT',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(data)
-      });
-    } else {
-      const r = await fetch('https://jsonblob.com/api/jsonBlob',{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(data)
-      });
-      if(r.ok){
-        const loc=r.headers.get('Location')||'';
-        const id=loc.split('/').pop();
-        if(id){
-          localStorage.setItem('nv_blob_'+c, id);
-          // Update QR code with blob id for cross-device discovery
-          const url = location.href.split('#')[0]+'#join='+c+'&b='+id;
-          document.getElementById('qrcode').innerHTML='';
-          try{new QRCode(document.getElementById('qrcode'),{text:url,width:180,height:180,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});}catch(_){}
-        }
-      }
-    }
+    await fetch(FIREBASE_URL + '/games/' + c + '.json', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    });
   } catch(_){}
 }
 
 async function load(c) {
   try {
-    const bId = localStorage.getItem('nv_blob_'+c);
-    if(bId){
-      const r=await fetch('https://jsonblob.com/api/jsonBlob/'+bId,{headers:{Accept:'application/json'}});
-      if(r.ok){const d=await r.json();try{localStorage.setItem('nv_'+c,JSON.stringify(d));}catch(_){}return d;}
+    const r = await fetch(FIREBASE_URL + '/games/' + c + '.json', {
+      headers: {Accept: 'application/json'}
+    });
+    if(r.ok){
+      const d = await r.json();
+      if(d){
+        try{localStorage.setItem('nv_'+c, JSON.stringify(d));}catch(_){}
+        return d;
+      }
     }
   } catch(_){}
   try{const s=localStorage.getItem('nv_'+c);if(s)return JSON.parse(s);}catch(_){}
@@ -343,9 +331,6 @@ async function createGame(){
 async function joinGame(){
   const raw=document.getElementById('join-inp').value.trim().toUpperCase();
   if(raw.length!==4){hmsg('Enter a 4-character code!','err');return;}
-  // Check for blob id in hash
-  const bm=location.hash.match(/b=([a-zA-Z0-9]+)/);
-  if(bm) localStorage.setItem('nv_blob_'+raw, bm[1]);
   hmsg('🔍 Looking for game…','wait');
   const state=await load(raw);
   if(!state){hmsg('Game not found! Check the code.','err');return;}
@@ -688,10 +673,8 @@ function confetti(){
 function checkHash(){
   const h=location.hash;
   const cm=h.match(/join=([A-Z0-9]{4})/i);
-  const bm=h.match(/b=([a-zA-Z0-9]+)/);
   if(cm){
     const c=cm[1].toUpperCase();
-    if(bm){localStorage.setItem('nv_blob_'+c,bm[1]);}
     location.hash='';
     document.getElementById('join-inp').value=c;
     setTimeout(joinGame,600);
