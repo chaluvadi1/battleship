@@ -594,11 +594,22 @@ function addColLbls(g){
 function addRlbl(row,r){const l=document.createElement('div');l.className='g-rl';l.textContent=ROWS[r];row.appendChild(l);}
 
 function renderAtkGrid(){
-  const other=role==='p1'?'p2':'p1';
-  if(!gs[other]||!gs[other].ships||!gs[role]||!gs[role].shots)return;
-  const shots=gs[role].shots.map?gs[role].shots:Object.values(gs[role].shots).map(r=>Object.values(r));
-  const oShips=gs[other].ships;
-  const grid=document.getElementById('atk-grid');grid.innerHTML='';
+    const other = role === 'p1' ? 'p2' : 'p1';
+
+  // 1. Ensure the game state (gs) and required player objects exist
+  if (!gs[role] || !gs[other]) return;
+
+  // 2. Safely extract shots, defaulting to an empty array if undefined
+  const rawShots = gs[role].shots || [];
+  const shots = Array.isArray(rawShots) ? rawShots : Object.values(rawShots).map(r => Object.values(r));
+
+  const oShips = gs[other].ships || [];
+  const grid = document.getElementById('atk-grid');
+
+  // 3. Clear and Prep for rendering
+  grid.innerHTML = '';
+
+  // ... your loop to create grid squares should follow here ...
   addColLbls(grid);
   for(let r=0;r<N;r++){
     const row=document.createElement('div');row.className='g-row';addRlbl(row,r);
@@ -628,10 +639,13 @@ function renderAtkGrid(){
 }
 
 function renderDefGrid(){
-  const other=role==='p1'?'p2':'p1';
-  if(!gs[role]||!gs[other=role==='p1'?'p2':'p1']||!gs[role].board)return;  
-  const oShots=gs[other].shots.map?gs[other].shots:Object.values(gs[other].shots).map(r=>Object.values(r));
-  const grid=document.getElementById('def-grid');grid.innerHTML='';
+  const other = role === 'p1' ? 'p2' : 'p1';
+
+  if (!gs[role] || !gs[other] || !gs[role].board) return;  
+
+  const oShots = gs[other].shots.map ? gs[other].shots : Object.values(gs[other].shots).map(r => Object.values(r));
+  const grid = document.getElementById('def-grid');
+  grid.innerHTML = '';
   addColLbls(grid);
   for(let r=0;r<N;r++){
     const row=document.createElement('div');row.className='g-row';addRlbl(row,r);
