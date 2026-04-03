@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>⚓ Naval Battle</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://www.google.com/recaptcha/api.js?render=6Le_zaQsAAAAADZ6FuCOR5VhOzZJoW483TRoZKuD"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Pirata+One&family=Nunito:wght@400;700;800;900&display=swap');
 :root{
@@ -121,6 +122,8 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 @keyframes cb{0%{transform:scale(0);opacity:1;}55%{opacity:1;}100%{transform:scale(2.5);opacity:0;}}
 .cpiece{position:fixed;pointer-events:none;z-index:9998;border-radius:3px;animation:cf 1.1s ease forwards;}
 @keyframes cf{0%{transform:translateY(-10px) rotate(0deg);opacity:1;}100%{transform:translateY(100vh) rotate(720deg);opacity:0;}}
+
+.rc-badge{position:fixed;bottom:8px;right:8px;font-size:11px;color:#999;z-index:1;pointer-events:none;}
 
 @media(max-width:480px){:root{--cell:36px;}.g-col{width:var(--cell);font-size:10px;}.cell{font-size:15px;}}
 @media(max-width:375px){:root{--cell:31px;}.title{font-size:26px;}}
@@ -249,6 +252,7 @@ const N=10;
 const COLS=['A','B','C','D','E','F','G','H','I','J'];
 const ROWS=['1','2','3','4','5','6','7','8','9','10'];
 const FIREBASE_URL='https://battleship-1aae0-default-rtdb.asia-southeast1.firebasedatabase.app';
+const RECAPTCHA_SITEKEY='6Le_zaQsAAAAADZ6FuCOR5VhOzZJoW483TRoZKuD';
 
 /* ─── App State ─── */
 let code=null, role=null, gs=null;
@@ -289,6 +293,14 @@ async function load(c) {
   return null;
 }
 
+/* ─── reCAPTCHA ─── */
+async function getRecaptchaToken(action='submit'){
+  try{
+    const token=await grecaptcha.execute(RECAPTCHA_SITEKEY,{action});
+    return token;
+  }catch(_){return null;}
+}
+
 /* ─── Factory ─── */
 const eb=()=>Array.from({length:N},()=>Array(N).fill(null));
 function newGs(c){
@@ -317,7 +329,9 @@ function genCode(){
   return Array.from({length:4},()=>c[Math.floor(Math.random()*c.length)]).join('');
 }
 async function createGame(){
+  const token=await getRecaptchaToken('create_game');
   code=genCode(); role='p1'; gs=newGs(code);
+  if(token)gs.rc_token=token;
   await save(code,gs); lastTs=gs.ts;
   show('lobby');
   document.getElementById('lobby-code').textContent=code;
@@ -332,11 +346,13 @@ async function joinGame(){
   const raw=document.getElementById('join-inp').value.trim().toUpperCase();
   if(raw.length!==4){hmsg('Enter a 4-character code!','err');return;}
   hmsg('🔍 Looking for game…','wait');
+  const token=await getRecaptchaToken('join_game');
   const state=await load(raw);
   if(!state){hmsg('Game not found! Check the code.','err');return;}
   if(state.phase!=='waiting'){hmsg('Game already started!','err');return;}
   code=raw; role='p2'; gs=state;
   gs.phase='placement'; gs.ts=Date.now();
+  if(token)gs.rc_token=token;
   await save(code,gs); lastTs=gs.ts;
   setupBC(code); show('placement'); initPl();
 }
@@ -604,6 +620,7 @@ function renderPanel(pid,ships,isEnemy){
 /* ─── Fire ─── */
 async function fire(r,c){
   if(!gs||gs.turn!==role||gs[role].shots[r][c])return;
+  const token=await getRecaptchaToken('fire');
   const state=JSON.parse(JSON.stringify(gs));
   const other=role==='p1'?'p2':'p1';
   const sid=state[other].board[r][c];
@@ -622,6 +639,7 @@ async function fire(r,c){
     state.turn=other;
     gMsg("💧 MISS! Opponent's turn…",'wait');
   }
+  if(token)state.rc_token=token;
   gs=state; await save(code,state); lastTs=gs.ts;
   spawnBall(r,c,!!sid);
   setTimeout(()=>{
