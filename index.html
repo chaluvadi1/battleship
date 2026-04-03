@@ -539,26 +539,50 @@ function renderPlGrid(hr,hc){
 }
 
 async function confirmPlacement(){
-  if(!SHIPS.every(s=>placed[s.id]))return;
-  const board=eb(), shipData={};
-  for(const[id,cells]of Object.entries(placed)){
-    cells.forEach(([r,c])=>{board[r][c]=id;});
-    shipData[id]={cells,hits:0,sunk:false};
+  if(!SHIPS.every(s=>placed[s.id])) return;
+  const board = eb(), shipData = {};
+  
+  for(const[id, cells] of Object.entries(placed)){
+    cells.forEach(([r, c]) => { board[r][c] = id; });
+    shipData[id] = { cells, hits: 0, sunk: false };
   }
-  const state=await load(code)||gs;
-  state[role].board=board;state[role].ships=shipData;state[role].ready=true;
-  const other=role==='p1'?'p2':'p1';
-  if(state[other].ready)state.phase='battle';
-  gs=state; await save(code,state); lastTs=gs.ts;
-  if(state.phase==='battle'){stopPoll();show('game');initGame();startPoll(code,'game');}
-  else{
-    const el=document.getElementById('pl-status');
-    el.style.display='block';el.className='status sw';
-    el.innerHTML='⏳ Waiting for opponent <span class="dots"><span></span><span></span><span></span></span>';
-    document.getElementById('pl-btn').disabled=true;
-    startPoll(code,'placement');
+
+  const state = await load(code) || gs;
+
+  // --- ADD THIS INITIALIZATION CHECK ---
+  if (!state[role]) {
+    state[role] = {}; 
+  }
+  // --------------------------------------
+
+  state[role].board = board;
+  state[role].ships = shipData;
+  state[role].ready = true;
+
+  const other = role === 'p1' ? 'p2' : 'p1';
+
+  // Defensive check for 'other' as well
+  if(state[other] && state[other].ready) state.phase = 'battle';
+
+  gs = state; 
+  await save(code, state); 
+  lastTs = gs.ts;
+
+  if(state.phase === 'battle'){
+    stopPoll();
+    show('game');
+    initGame();
+    startPoll(code, 'game');
+  } else {
+    const el = document.getElementById('pl-status');
+    el.style.display = 'block';
+    el.className = 'status sw';
+    el.innerHTML = '⏳ Waiting for opponent <span class="dots"><span></span><span></span><span></span></span>';
+    document.getElementById('pl-btn').disabled = true;
+    startPoll(code, 'placement');
   }
 }
+
 function updPlStatus(){
   if(!gs)return;
   const other=role==='p1'?'p2':'p1';
