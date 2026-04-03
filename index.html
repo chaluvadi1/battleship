@@ -25,6 +25,34 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 
 #app{position:relative;z-index:1;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;overflow-y:auto;overflow-x:hidden;padding:10px 10px 28px;}
 
+.cell{
+  /* ...existing code... */
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.cell:active {
+  transform: scale(0.98);
+}
+
+.btn {
+  /* ...existing code... */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.btn:active {
+  transform: scale(0.93);
+}
+
+/* Ensure clickable elements work on Mac */
+button, [onclick], .cell, .sr {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .screen{display:none;flex-direction:column;align-items:center;width:100%;max-width:660px;gap:13px;animation:fadeUp .35s ease;}
 .screen.active{display:flex;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
@@ -460,7 +488,11 @@ function renderPlGrid(hr,hc){
       const k=r+','+c;
       if(pSet.has(k)){cell.classList.add('placed');cell.textContent='🟦';}
       else if(pvSet.has(k))cell.classList.add(pvOk?'hok':'hbad');
-      const drop=(rr,cc)=>{
+      
+      const rr=r, cc=c;
+      
+      // Handle click/trackpad on Mac
+      const placeShip=()=>{
         if(!selShip)return;
         const ship=SHIPS.find(s=>s.id===selShip);if(!ship)return;
         delete placed[selShip];
@@ -472,13 +504,18 @@ function renderPlGrid(hr,hc){
         renderPlShips();renderPlGrid();
         document.getElementById('pl-btn').disabled=!SHIPS.every(s=>placed[s.id]);
       };
-      cell.addEventListener('mouseover',()=>renderPlGrid(r,c));
+      
+      cell.addEventListener('click',placeShip);
+      cell.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')e.preventDefault();});
+      
+      cell.addEventListener('mouseover',()=>renderPlGrid(rr,cc));
       cell.addEventListener('mouseleave',()=>renderPlGrid());
-      cell.addEventListener('click',()=>drop(r,c));
+      
       let tmv=false;
-      cell.addEventListener('touchstart',e=>{e.preventDefault();tmv=false;renderPlGrid(r,c);},{passive:false});
+      cell.addEventListener('touchstart',e=>{e.preventDefault();tmv=false;renderPlGrid(rr,cc);},{passive:false});
       cell.addEventListener('touchmove',()=>{tmv=true;},{passive:true});
-      cell.addEventListener('touchend',e=>{e.preventDefault();if(!tmv)drop(r,c);},{passive:false});
+      cell.addEventListener('touchend',e=>{e.preventDefault();if(!tmv)placeShip();},{passive:false});
+      
       row.appendChild(cell);
     }
     grid.appendChild(row);
