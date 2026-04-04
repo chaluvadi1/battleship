@@ -971,11 +971,10 @@
     <!-- WIN -->
     <div id="sc-win" class="screen">
       <div class="trophy-big" id="win-icon">🏆</div>
-      <div class="win-title" id="win-title">Victory!</div>
-      <div class="win-sub" id="win-sub">You sank the fleet!</div>
-      <div class="frow" style="margin-top:12px;">
-        <button class="btn btn-pri" onclick="goHome()">🔁 Play Again</button>
-        <button class="btn btn-sec" onclick="goHome()">🏠 Home</button>
+      <div class="win-title" id="win-title">You won!</div>
+      <div class="win-sub" id="win-sub"></div>
+      <div id="win-exit-wrap" class="frow" style="margin-top:18px;display:none;width:100%;max-width:320px;">
+        <button class="btn btn-pri btn-full" onclick="exitFinishedGame()">🚪 Exit game</button>
       </div>
     </div>
 
@@ -1003,16 +1002,38 @@
     /* ─── Factory ─── */
     const eb = () => Array.from({ length: N }, () => Array(N).fill(null));
 
+    function p2BoardHasShipCells(p2) {
+      if (!p2 || !Array.isArray(p2.board)) return false;
+      for (let r = 0; r < p2.board.length; r++) {
+        const row = p2.board[r];
+        if (!row) continue;
+        for (let c = 0; c < row.length; c++)
+          if (row[c] != null) return true;
+      }
+      return false;
+    }
+
+    /** True if a real second player has claimed this game (not the empty p2 shell from newGs). */
+    function isP2SlotLocked(state) {
+      if (!state || !state.p2) return false;
+      if (state.p2.joined) return true;
+      if (state.p2.ready) return true;
+      if (state.p2.ships && typeof state.p2.ships === 'object' && Object.keys(state.p2.ships).length > 0) return true;
+      if (p2BoardHasShipCells(state.p2)) return true;
+      return false;
+    }
+
     /* ─── App State ─── */
     let code = null, role = null;
     let gs = {
       p1: { board: eb(), ships: {}, shots: eb(), ready: false, name: 'Player 1' },
-      p2: { board: eb(), ships: {}, shots: eb(), ready: false, name: 'Player 2' },
+      p2: { board: eb(), ships: {}, shots: eb(), ready: false, name: 'Player 2', joined: false },
       phase: 'placement'
     };
     let mode = 'lobby'; // 'home', 'lobby', 'placement', 'game', 'win'
     let pollTmr = null, selShip = null, horiz = true, placed = {}, lastTs = 0, bc = null;
     let lastVolleyShownSeq = -1, fireSplashTimer = null;
+    let winRevealTimer = null, winScreenShown = false;
 
     /* ─────────────────────────────────────────
        STORAGE / RELAY
@@ -1050,6 +1071,14 @@
       return null;
     }
 
+    async function deleteRemoteGame(c) {
+      if (!c) return;
+      try {
+        await fetch(FIREBASE_URL + '/games/' + encodeURIComponent(c) + '.json', { method: 'DELETE' });
+      } catch (_) { }
+      try { localStorage.removeItem('nv_' + c); } catch (_) { }
+    }
+
     /* ─── reCAPTCHA ─── */
     async function getRecaptchaToken(action = 'submit') {
       try {
@@ -1075,7 +1104,7 @@
       return {
         code: c, phase: 'waiting',
         p1: { board: eb(), ships: {}, ready: false, shots: eb(), name: 'Player 1' },
-        p2: { board: eb(), ships: {}, ready: false, shots: eb(), name: 'Player 2' },
+        p2: { board: eb(), ships: {}, ready: false, shots: eb(), name: 'Player 2', joined: false },
         turn: 'p1', winner: null, ts: Date.now()
       };
     }
@@ -1089,6 +1118,10 @@
     function goHome() {
       stopPoll();
       if (fireSplashTimer) { clearTimeout(fireSplashTimer); fireSplashTimer = null; }
+      if (winRevealTimer) { clearTimeout(winRevealTimer); winRevealTimer = null; }
+      winScreenShown = false;
+      const wwrap = document.getElementById('win-exit-wrap');
+      if (wwrap) wwrap.style.display = 'none';
       const fs = document.getElementById('fire-splash');
       if (fs) { fs.classList.remove('show', 'fs-hit', 'fs-miss'); fs.textContent = ''; }
       lastVolleyShownSeq = -1;
@@ -1140,20 +1173,19 @@
 
       const savedRole = sessionStorage.getItem('btls_role');
       const savedCode = sessionStorage.getItem('btls_code');
-      const isReturning = raw === savedCode && savedRole;
+      const sameCode = raw === savedCode;
+      const hostSameBrowser = sameCode && savedRole === 'p1';
+      const returningP2 = sameCode && savedRole === 'p2';
 
-      // 2. ROLE LOGIC: Are you returning or a new Player 2?
-      if (isReturning) {
-        // You are a returning player (P1 or P2)
-        role = savedRole;
-      }
-      else if (state.p2 && (state.p2.ready || state.p2.board)) {
-        // Someone else is already Player 2
+      // 2. ROLE: host re-joining their code vs returning P2 vs first-time guest (not raw "isReturning" — that made same-browser P1+P2 skip setting p2.name)
+      if (hostSameBrowser) {
+        role = 'p1';
+      } else if (returningP2) {
+        role = 'p2';
+      } else if (isP2SlotLocked(state)) {
         hmsg('🚫 This game is full!', 'err');
         return;
-      }
-      else {
-        // You are the new Player 2
+      } else {
         role = 'p2';
         sessionStorage.setItem('btls_role', 'p2');
         sessionStorage.setItem('btls_code', raw);
@@ -1165,11 +1197,13 @@
 
       if (!gs.p1) gs.p1 = { board: eb(), ships: {}, ready: false, shots: eb(), name: 'Player 1' };
       else if (gs.p1.name == null || gs.p1.name === '') gs.p1.name = 'Player 1';
-      if (!gs.p2) gs.p2 = { board: eb(), ships: {}, ready: false, shots: eb(), name: 'Player 2' };
+      if (!gs.p2) gs.p2 = { board: eb(), ships: {}, ready: false, shots: eb(), name: 'Player 2', joined: false };
       else if (gs.p2.name == null || gs.p2.name === '') gs.p2.name = 'Player 2';
+      if (gs.p2.joined !== true && gs.p2.joined !== false) gs.p2.joined = false;
 
-      if (role === 'p2' && !isReturning) {
+      if (role === 'p2' && !returningP2) {
         gs.p2.name = sanitizePlayerName(document.getElementById('join-name-inp').value, 'Player 2');
+        gs.p2.joined = true;
       }
 
       // 3. PHASE LOGIC
@@ -1271,10 +1305,11 @@
         // Logic for transitioning to battle is now handled by the top-level 'if'
       }
       else if (mode === 'game') {
-        renderGame();
         if (s.phase === 'done') {
           stopPoll();
-          setTimeout(() => showWin(s), 800);
+          setTimeout(() => showWin(s), 500);
+        } else {
+          renderGame();
         }
       }
     }
@@ -1595,11 +1630,24 @@
       }
     }
 
-    function renderPanels() {
-      renderPanel('my-panel', gs[role].ships, false);
-      renderPanel('enemy-panel', gs[role === 'p1' ? 'p2' : 'p1'].ships, true);
+    function hitsFromShotGrid(shipCells, shotGrid) {
+      if (!shipCells || !shotGrid) return 0;
+      let n = 0;
+      for (let i = 0; i < shipCells.length; i++) {
+        const [r, c] = shipCells[i];
+        if (shotGrid[r]?.[c] === 'hit') n++;
+      }
+      return n;
     }
-    function renderPanel(pid, ships, isEnemy) {
+
+    function renderPanels() {
+      if (!gs) return;
+      const other = role === 'p1' ? 'p2' : 'p1';
+      renderPanel('my-panel', gs[role].ships, false, gs[other]?.shots);
+      renderPanel('enemy-panel', gs[other].ships, true, gs[role]?.shots);
+    }
+
+    function renderPanel(pid, ships, isEnemy, shotGrid) {
       const p = document.getElementById(pid); if (!p) return; p.innerHTML = '';
       SHIPS.forEach(cfg => {
         const s = ships[cfg.id];
@@ -1610,13 +1658,19 @@
         <div class="sr-cells">${Array(cfg.sz).fill('<div class="sc" style="opacity:.2;"></div>').join('')}</div>
         <div class="sr-tag" style="opacity:.35;">???</div>`;
         } else if (s) {
-          d.className = 'sr' + (s.sunk ? ' sunken' : '');
+          const hits = Math.max(s.hits | 0, hitsFromShotGrid(s.cells, shotGrid));
+          const sunk = !!s.sunk || hits >= cfg.sz;
+          d.className = 'sr' + (sunk ? ' sunken' : '');
           const cells = Array(cfg.sz).fill(null).map((_, i) => {
-            if (s.sunk) return '<div class="sc s"></div>';
-            if (isEnemy && i < (s.hits || 0)) return '<div class="sc h"></div>';
+            if (sunk) return '<div class="sc s"></div>';
+            if (i < hits) return '<div class="sc h"></div>';
             return '<div class="sc"></div>';
           });
-          const tagCls = s.sunk ? ' d' : '', tagTxt = s.sunk ? '💀 SUNK' : isEnemy ? `${s.hits || 0}/${cfg.sz}` : '⚓ OK';
+          const tagCls = sunk ? ' d' : '';
+          let tagTxt;
+          if (sunk) tagTxt = '💀 SUNK';
+          else if (isEnemy) tagTxt = `${hits}/${cfg.sz}`;
+          else tagTxt = hits > 0 ? `${hits}/${cfg.sz}` : '⚓ OK';
           d.innerHTML = `<div><div class="sr-name">${cfg.name}</div></div>
         <div class="sr-cells">${cells.join('')}</div>
         <div class="sr-tag${tagCls}">${tagTxt}</div>`;
@@ -1628,39 +1682,62 @@
     /* ─── Fire ─── */
 
     async function fire(r, c) {
-      // 1. Turn Check (Ensure this is p1 or p2)
       if (gs.turn !== role) {
         gMsg("Wait for your turn!", "err");
         return;
       }
+      if (gs.phase !== 'battle') return;
 
       const other = role === 'p1' ? 'p2' : 'p1';
 
-      // --- THE CRITICAL FIX START ---
-      // Ensure the 'shots' object exists for the current player
       if (!gs[role].shots) gs[role].shots = {};
-
-      // Ensure the ROW 'r' exists inside shots before we try to access index 'c'
       if (!gs[role].shots[r]) gs[role].shots[r] = {};
-
-      // Now we can safely check if a shot was already taken
       if (gs[role].shots[r][c]) return;
-      // --- THE CRITICAL FIX END ---
 
-      // 2. Ship ID Check (The logic you had earlier)
       const targetId = gs[other]?.board?.[r]?.[c];
-      const result = targetId ? 'hit' : 'miss';
+      let result;
 
-      // 3. Record the shot
-      gs[role].shots[r][c] = result;
+      if (targetId) {
+        result = 'hit';
+        gs[role].shots[r][c] = 'hit';
+        const ship = gs[other].ships?.[targetId];
+        if (ship) {
+          ship.hits = (ship.hits | 0) + 1;
+          const cfg = SHIPS.find(s => s.id === targetId);
+          if (cfg && ship.hits >= cfg.sz) {
+            ship.sunk = true;
+            if (ship.cells)
+              for (const [sr, sc] of ship.cells) {
+                if (!gs[role].shots[sr]) gs[role].shots[sr] = {};
+                gs[role].shots[sr][sc] = 'hit';
+              }
+          }
+        }
+        const allSunk = SHIPS.every(cfg => !!gs[other].ships?.[cfg.id]?.sunk);
+        if (allSunk) {
+          gs.phase = 'done';
+          gs.winner = role;
+        }
+      } else {
+        result = 'miss';
+        gs[role].shots[r][c] = 'miss';
+      }
 
-      // 4. Turn Switch & Sync + volley marker (both clients show splash via poll / renderGame)
-      gs.turn = other;
+      if (gs.phase !== 'done')
+        gs.turn = other;
+
       gs.shotSeq = (gs.shotSeq | 0) + 1;
       gs.lastVolley = { result, seq: gs.shotSeq };
 
       await save(code, gs);
-      renderGame();
+      lastTs = gs.ts;
+
+      if (gs.phase === 'done') {
+        stopPoll();
+        setTimeout(() => showWin(gs), 500);
+      } else {
+        renderGame();
+      }
     }
 
 
@@ -1684,14 +1761,30 @@
 
     /* ─── Win ─── */
     function showWin(s) {
+      if (winScreenShown) return;
+      winScreenShown = true;
+      stopPoll();
       const won = s.winner === role;
       document.getElementById('win-icon').textContent = won ? '🏆' : '☠️';
-      document.getElementById('win-title').textContent = won ? '⚓ VICTORY!' : '💀 Defeated!';
+      document.getElementById('win-title').textContent = won ? 'You won!' : 'You lost!';
       document.getElementById('win-sub').textContent = won
-        ? 'You sank the entire enemy fleet! You rule the seas, Captain!'
-        : 'Your fleet was sunk! Better luck next time, matey!';
+        ? 'You sank the enemy fleet.'
+        : 'Your fleet was sunk.';
+      const wrap = document.getElementById('win-exit-wrap');
+      if (wrap) wrap.style.display = 'none';
       if (won) confetti();
       show('win');
+      if (winRevealTimer) clearTimeout(winRevealTimer);
+      winRevealTimer = setTimeout(() => {
+        winRevealTimer = null;
+        if (wrap) wrap.style.display = 'flex';
+      }, 2500);
+    }
+
+    async function exitFinishedGame() {
+      const c = code;
+      await deleteRemoteGame(c);
+      goHome();
     }
 
     /* ─── Exit Game ─── */
