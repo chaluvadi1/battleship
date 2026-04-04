@@ -1776,9 +1776,13 @@
       const won = s.winner === role;
       document.getElementById('win-icon').textContent = won ? '🏆' : '☠️';
       document.getElementById('win-title').textContent = won ? 'You won!' : 'You lost!';
-      document.getElementById('win-sub').textContent = won
-        ? 'You sank the enemy fleet.'
-        : 'Your fleet was sunk.';
+      let sub;
+      if (won) {
+        sub = s.forfeitBy ? 'Your opponent left the battle.' : 'You sank the enemy fleet.';
+      } else {
+        sub = 'Your fleet was sunk.';
+      }
+      document.getElementById('win-sub').textContent = sub;
       const wrap = document.getElementById('win-exit-wrap');
       if (wrap) wrap.style.display = 'none';
       if (won) confetti();
@@ -1797,10 +1801,29 @@
     }
 
     /* ─── Exit Game ─── */
-    function exitGame() {
-      if (confirm('⚠️ Are you sure you want to exit? The game will end.')) {
-        goHome();
+    async function exitGame() {
+      const inBattle = code && gs && role && gs.phase === 'battle';
+      if (!confirm(inBattle
+        ? '⚠️ Exit counts as a forfeit — your opponent wins the match. Continue?'
+        : '⚠️ Are you sure you want to exit?')) return;
+      if (inBattle) {
+        try {
+          const state = await load(code) || gs;
+          if (state.phase === 'battle') {
+            const other = role === 'p1' ? 'p2' : 'p1';
+            state.phase = 'done';
+            state.winner = other;
+            state.forfeitBy = role;
+            gs = state;
+            await save(code, state);
+            lastTs = gs.ts;
+          }
+        } catch (_) { }
       }
+      goHome();
+      setTimeout(() => {
+        try { window.close(); } catch (_) { }
+      }, 200);
     }
 
     function confetti() {
