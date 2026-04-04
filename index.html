@@ -870,15 +870,18 @@
       <div class="card">
         <div class="card-title">🏴‍☠️ Set Sail!</div>
         <div style="display:flex;flex-direction:column;gap:11px;">
-          <label for="create-name-inp" style="font-size:12px;color:var(--foam);font-weight:800;">Your name</label>
+          <label for="create-name-inp" style="font-size:12px;color:var(--foam);font-weight:800;">Your name (host)</label>
           <input id="create-name-inp" class="inp inp-name" type="text" maxlength="24" autocomplete="nickname"
             placeholder="Player 1 (optional)">
+          <label for="opponent-name-inp" style="font-size:12px;color:var(--foam);font-weight:800;">Opponent name (optional)</label>
+          <input id="opponent-name-inp" class="inp inp-name" type="text" maxlength="24" autocomplete="nickname"
+            placeholder="Shown in battle; guest can change when they join">
           <button class="btn btn-pri btn-full" onclick="createGame()">⚓ Create New Game</button>
           <div class="divider"></div>
           <div style="font-size:12px;color:var(--foam);text-align:center;font-weight:700;">— or join with a code —</div>
-          <label for="join-name-inp" style="font-size:12px;color:var(--foam);font-weight:800;">Your name</label>
+          <label for="join-name-inp" style="font-size:12px;color:var(--foam);font-weight:800;">Your name (guest)</label>
           <input id="join-name-inp" class="inp inp-name" type="text" maxlength="24" autocomplete="nickname"
-            placeholder="Player 2 (optional)">
+            placeholder="Your display name (optional)">
           <input id="join-inp" class="inp" type="text" maxlength="4" placeholder="XXXX"
             oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9]/g,'')"
             onkeydown="if(event.key==='Enter')joinGame()">
@@ -1097,7 +1100,7 @@
 
     function playerLabel(p, fallback) {
       if (!p) return fallback;
-      return sanitizePlayerName(p.name, fallback);
+      return sanitizePlayerName(p.name != null ? String(p.name) : '', fallback);
     }
 
     function newGs(c) {
@@ -1129,8 +1132,10 @@
       try { sessionStorage.removeItem('btls_role'); sessionStorage.removeItem('btls_code'); } catch (_) { }
       code = role = gs = selShip = null; horiz = true; placed = {}; lastTs = 0;
       const cn = document.getElementById('create-name-inp');
+      const on = document.getElementById('opponent-name-inp');
       const jn = document.getElementById('join-name-inp');
       if (cn) cn.value = '';
+      if (on) on.value = '';
       if (jn) jn.value = '';
       show('home');
     }
@@ -1144,6 +1149,8 @@
       const token = await getRecaptchaToken('create_game');
       code = genCode(); role = 'p1'; gs = newGs(code);
       gs.p1.name = sanitizePlayerName(document.getElementById('create-name-inp').value, 'Player 1');
+      const presetP2 = sanitizePlayerName(document.getElementById('opponent-name-inp')?.value || '', '');
+      if (presetP2) gs.p2.name = presetP2;
       if (token) gs.rc_token = token;
       await save(code, gs); lastTs = gs.ts;
       try {
@@ -1202,7 +1209,9 @@
       if (gs.p2.joined !== true && gs.p2.joined !== false) gs.p2.joined = false;
 
       if (role === 'p2' && !returningP2) {
-        gs.p2.name = sanitizePlayerName(document.getElementById('join-name-inp').value, 'Player 2');
+        const typed = sanitizePlayerName(document.getElementById('join-name-inp')?.value || '', '');
+        const existing = gs.p2 && gs.p2.name != null ? sanitizePlayerName(String(gs.p2.name), '') : '';
+        gs.p2.name = typed || existing || 'Player 2';
         gs.p2.joined = true;
       }
 
@@ -1414,11 +1423,11 @@
 
       const state = await load(code) || gs;
 
-      // --- ADD THIS INITIALIZATION CHECK ---
       if (!state[role]) {
-        state[role] = {};
+        state[role] = { name: gs?.[role]?.name };
+      } else if ((state[role].name == null || state[role].name === '') && gs?.[role]?.name) {
+        state[role].name = gs[role].name;
       }
-      // --------------------------------------
 
       state[role].board = board;
       state[role].ships = shipData;
