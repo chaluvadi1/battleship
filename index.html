@@ -1093,6 +1093,7 @@
       if (fs) { fs.classList.remove('show', 'fs-hit', 'fs-miss'); fs.textContent = ''; }
       lastVolleyShownSeq = -1;
       try { if (bc) { bc.close(); bc = null; } } catch (_) { }
+      try { sessionStorage.removeItem('btls_role'); sessionStorage.removeItem('btls_code'); } catch (_) { }
       code = role = gs = selShip = null; horiz = true; placed = {}; lastTs = 0;
       const cn = document.getElementById('create-name-inp');
       const jn = document.getElementById('join-name-inp');
@@ -1112,6 +1113,10 @@
       gs.p1.name = sanitizePlayerName(document.getElementById('create-name-inp').value, 'Player 1');
       if (token) gs.rc_token = token;
       await save(code, gs); lastTs = gs.ts;
+      try {
+        sessionStorage.setItem('btls_role', 'p1');
+        sessionStorage.setItem('btls_code', code);
+      } catch (_) { }
       show('lobby');
       document.getElementById('lobby-code').textContent = code;
       const url = location.href.split('#')[0] + '#join=' + code;
@@ -1247,18 +1252,13 @@
     function apply(s, mode) {
       gs = s;
 
-      // 1. If we are in placement but the game has moved to battle
+      // Battle started (opponent locked in): leave lobby or placement and enter game.
+      // Note: there is no #placement element — only #sc-placement — so the old check threw and was swallowed by doPoll's try/catch.
       if (s.phase === 'battle' && mode !== 'game') {
-        // If the UI is still stuck in placement or lobby, force it to 'game'
-        if (document.getElementById('placement').style.display !== 'none' || mode !== 'game') {
-          stopPoll();
-          show('game');
-          initGame(); // This calls renderGame()
-          startPoll(code, 'game');
-        } else {
-          // We are already in the game screen, just update the boards
-          renderGame();
-        }
+        stopPoll();
+        show('game');
+        initGame();
+        startPoll(code, 'game');
       }
       else if (mode === 'lobby' && s.phase === 'placement') {
         stopPoll();
@@ -1663,6 +1663,7 @@
       renderGame();
     }
 
+
     function gMsg(txt, t) {
       const el = document.getElementById('game-msg');
       if (!el) return;
@@ -1728,25 +1729,6 @@
 
     window.addEventListener('load', checkHash);
     window.addEventListener('focus', () => { const m = curMode(); if (code && m) doPoll(code, m); });
-    window.onload = async () => {
-      const savedCode = sessionStorage.getItem('btls_code');
-      const savedRole = sessionStorage.getItem('btls_role');
-
-      if (savedCode && savedRole) {
-        const state = await load(savedCode);
-        if (state) {
-          code = savedCode;
-          role = savedRole;
-          gs = state;
-          // Re-route based on the phase in the database
-          if (gs.phase === 'battle') {
-            mode = 'game'; show('game'); initGame(); startPoll(code, 'game');
-          } else {
-            mode = 'placement'; show('placement'); initPl(); startPoll(code, 'placement');
-          }
-        }
-      }
-    };
     window.addEventListener('load', async () => {
       const savedCode = sessionStorage.getItem('btls_code');
       const savedRole = sessionStorage.getItem('btls_role');
@@ -1766,18 +1748,41 @@
           if (gs.phase === 'battle') {
             mode = 'game';
             show('game');
-            initGame(); // Sets mode to 'game' and renders grids
+            initGame();
             startPoll(code, 'game');
           } else if (gs.phase === 'placement') {
             mode = 'placement';
             show('placement');
-            // If already ready, don't re-init placement grid
             if (gs[role] && gs[role].ready) {
+              const el = document.getElementById('pl-status');
+              if (el) {
+                el.style.display = 'block';
+                el.className = 'status sw';
+                el.innerHTML = '⏳ Waiting for opponent... <span class="dots"><span></span><span></span><span></span></span>';
+              }
+              document.getElementById('pl-btn').disabled = true;
               updPlStatus();
             } else {
               initPl();
             }
             startPoll(code, 'placement');
+          } else if (gs.phase === 'waiting') {
+            mode = 'lobby';
+            show('lobby');
+            document.getElementById('lobby-code').textContent = code;
+            const url = location.href.split('#')[0] + '#join=' + code;
+            document.getElementById('qrcode').innerHTML = '';
+            try {
+              new QRCode(document.getElementById('qrcode'), {
+                text: url, width: 180, height: 180, colorDark: '#000', colorLight: '#fff',
+                correctLevel: QRCode.CorrectLevel.M
+              });
+            } catch (_) { }
+            setupBC(code);
+            startPoll(code, 'lobby');
+          } else if (gs.phase === 'done') {
+            stopPoll();
+            showWin(gs);
           }
           hmsg('✅ Connected', 'success');
         } else {
